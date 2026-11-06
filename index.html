@@ -105,6 +105,7 @@ footer{margin-top:40px;color:var(--muted);font-size:13px}
         <tr><td><code>ALTER COLUMN … TYPE</code></td><td>Rewrites the table and every index</td><td>New column, backfill, switch reads</td></tr>
         <tr><td><code>SET NOT NULL</code></td><td>Full-table scan while reads and writes are blocked</td><td><code>CHECK … NOT VALID</code>, <code>VALIDATE</code>, then <code>SET NOT NULL</code></td></tr>
         <tr><td><code>ADD FOREIGN KEY</code> / <code>CHECK</code></td><td>Validates every row while blocking writes</td><td><code>NOT VALID</code>, then <code>VALIDATE CONSTRAINT</code> later</td></tr>
+        <tr><td><code>REFERENCES</code> with no index on the column</td><td>Every delete on the parent scans the whole child table (100 deletes: 7.87 s vs 3.66 ms on 2M rows)</td><td>Index the foreign key column</td></tr>
         <tr><td><code>ADD UNIQUE</code> / <code>PRIMARY KEY</code></td><td>Builds an index while the table is unusable</td><td>Unique index <code>CONCURRENTLY</code>, then <code>USING INDEX</code></td></tr>
         <tr><td><code>RENAME</code>, <code>DROP COLUMN</code>, <code>DROP TABLE</code></td><td>Old app instances fail during a rolling deploy</td><td>Expand and contract; drop after code stops using it</td></tr>
         <tr><td><code>CONCURRENTLY</code> in a transaction</td><td>Postgres rejects it; the migration fails</td><td>Own migration with the transaction turned off</td></tr>

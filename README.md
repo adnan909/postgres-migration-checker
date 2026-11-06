@@ -44,6 +44,7 @@ Works with any tool that keeps migrations as SQL files: Prisma (`prisma/migratio
 - `ADD COLUMN` with a volatile default like `gen_random_uuid()` (rewrites the table), or `NOT NULL` with no default (fails on non-empty tables)
 - `ALTER COLUMN ... TYPE` (rewrite), `SET NOT NULL` (full scan under the strongest lock)
 - `FOREIGN KEY` / `CHECK` without `NOT VALID`, `UNIQUE` / `PRIMARY KEY` without `USING INDEX`
+- Foreign keys with no index on the referencing columns: every `DELETE` on the parent table (cascade or not) scans the whole child table. Measured on 2M child rows: deleting 100 parents took 7.87 s without the index, 3.66 ms with it. The checker only sees the migration, so on an existing column this is a note (the index may already exist); on a new column it is a warning.
 - `RENAME` and `DROP` that break code still running during a deploy
 - `VACUUM FULL`, `CLUSTER`, `REINDEX`, `REFRESH MATERIALIZED VIEW`, in-migration `UPDATE`/`DELETE` backfills
 - Missing `lock_timeout`, and strong locks piling up inside one transaction

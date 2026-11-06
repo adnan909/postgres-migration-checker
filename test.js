@@ -96,6 +96,27 @@ ALTER TABLE events ADD COLUMN token uuid DEFAULT gen_random_uuid();`;
   assert.deepEqual(titles(sql), []);
 });
 
+test('foreign keys without an index', () => {
+  const NO = /No index on/;
+  assert.ok(has('CREATE TABLE orders (id bigserial PRIMARY KEY, user_id int NOT NULL REFERENCES users(id) ON DELETE CASCADE);', /^warning: No index on orders\(user_id\) for its foreign key/));
+  assert.ok(!has('CREATE TABLE orders (id int, user_id int REFERENCES users(id));\nCREATE INDEX ON orders (user_id);', NO));
+  assert.ok(has('CREATE TABLE m (a int, b int, FOREIGN KEY (a, b) REFERENCES p(x, y));\nCREATE INDEX i ON m (a);', /warning: No index on m\(a, b\)/));
+  assert.ok(!has('CREATE TABLE m (a int, b int, CONSTRAINT f FOREIGN KEY (a, b) REFERENCES p(x, y));\nCREATE INDEX i ON m USING btree (b, a, id);', NO));
+  assert.ok(!has('CREATE TABLE m (user_id int PRIMARY KEY REFERENCES users(id));', NO));
+  assert.ok(has('CREATE TABLE m (user_id int REFERENCES users, tag_id int REFERENCES tags, PRIMARY KEY (user_id, tag_id));', /No index on m\(tag_id\)/));
+  assert.ok(!has('CREATE TABLE m (user_id int REFERENCES users, tag_id int REFERENCES tags, PRIMARY KEY (user_id, tag_id));', /No index on m\(user_id\)/));
+  assert.ok(has('CREATE TABLE m (a int);\nCREATE INDEX i ON m (lower(a));\nALTER TABLE m ADD FOREIGN KEY (a) REFERENCES p;', /No index on m\(a\)/));
+  assert.ok(has(LT + 'ALTER TABLE orders ADD COLUMN user_id int REFERENCES users(id);', /^warning: No index on orders\(user_id\)/));
+  assert.ok(has(LT + 'ALTER TABLE orders ADD CONSTRAINT fk FOREIGN KEY (user_id) REFERENCES users(id) NOT VALID;', /^info: No index on orders\(user_id\)/));
+  assert.ok(!has(LT + 'ALTER TABLE orders ADD CONSTRAINT fk FOREIGN KEY (user_id) REFERENCES users(id) NOT VALID;\nCREATE INDEX CONCURRENTLY i ON orders (user_id DESC NULLS LAST);', NO, { wrappedInTransaction: false }));
+  assert.ok(!has('CREATE TABLE "Orders" ("userId" int REFERENCES "Users"(id));\nCREATE INDEX ON "Orders" ("userId");', NO));
+  const f = analyze('CREATE TABLE "Orders" ("userId" int REFERENCES "Users"(id));').findings.find((x) => NO.test(x.title));
+  assert.match(f.fix, /^CREATE INDEX "Orders_userId_idx" ON "Orders" \("userId"\);/);
+  const g = analyze(LT + 'ALTER TABLE orders ADD COLUMN user_id int REFERENCES users(id);').findings.find((x) => NO.test(x.title));
+  assert.match(g.fix, /^CREATE INDEX CONCURRENTLY orders_user_id_idx ON orders \(user_id\);/);
+  assert.equal(titles('CREATE TABLE t (LIKE other INCLUDING ALL);').length, 0);
+});
+
 test('line numbers point at the statement', () => {
   const f = analyze(LT + '\n\nCREATE INDEX i ON users (email);').findings[0];
   assert.equal(f.line, 4);
